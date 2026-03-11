@@ -19,12 +19,11 @@ class VideoLinkCheckerService
         $responses = Http::pool(function (Pool $pool) use ($items) {
             $requests = [];
             foreach ($items as $index => $item) {
-                // Perform a HEAD request to save bandwidth, fallback to GET if needed by the server
-                // We'll use GET here as some servers block head requests or return misleading statuses.
+                // Perform a HEAD request to only retrieve headers without downloading the full video
                 // We set a timeout of 10 seconds.
                 $url = $item['media_url'];
                 if ($url) {
-                    $requests[] = $pool->as((string) $index)->timeout(10)->get($url);
+                    $requests[] = $pool->as((string) $index)->timeout(10)->head($url);
                 }
             }
             return $requests;
