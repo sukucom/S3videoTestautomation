@@ -152,7 +152,7 @@ class CheckVideoLinks extends Command
     /**
      * Process a batch and write to output handle.
      */
-    protected function processBatch(array $batch, clone $outputHandle)
+    protected function processBatch(array $batch, $outputHandle)
     {
         $results = $this->checkerService->checkBatch($batch);
 
