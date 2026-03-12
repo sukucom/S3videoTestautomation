@@ -87,17 +87,26 @@ class CheckVideoLinks extends Command
         }
         
         // Define indices based on requirements
-        // Input: firstName, lastName, email, phone, media_url
-        // Output: firstName, lastName, email, media_url, status
+        // Input variants: firstName/lastName/email/media_url OR title/video_url/target_value
         
         $firstNameIndex = array_search('firstName', $headers);
         $lastNameIndex = array_search('lastName', $headers);
         $emailIndex = array_search('email', $headers);
-        $phoneIndex = array_search('phone', $headers);
         $mediaUrlIndex = array_search('media_url', $headers);
+        
+        // Fallbacks for the Hindi CSV
+        if ($mediaUrlIndex === false) {
+             $mediaUrlIndex = array_search('video_url', $headers);
+        }
+        if ($firstNameIndex === false) {
+             $firstNameIndex = array_search('title', $headers);
+        }
+        if ($emailIndex === false) {
+             $emailIndex = array_search('target_value', $headers);
+        }
 
-        if ($firstNameIndex === false || $lastNameIndex === false || $emailIndex === false || $mediaUrlIndex === false) {
-             $this->error("Missing required columns in CSV (firstName, lastName, email, media_url).");
+        if ($mediaUrlIndex === false) {
+             $this->error("Missing required URL column (media_url or video_url) in CSV.");
              fclose($handle);
              fclose($outputHandle);
              return 1;
