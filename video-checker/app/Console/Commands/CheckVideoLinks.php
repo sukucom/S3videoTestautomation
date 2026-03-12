@@ -13,7 +13,7 @@ class CheckVideoLinks extends Command
      *
      * @var string
      */
-    protected $signature = 'video:check-links {import_file : The path to the input CSV file}';
+    protected $signature = 'video:check-links {import_file : The path to the input CSV file} {--output= : The name of the output CSV file}';
 
     /**
      * The console command description.
@@ -45,29 +45,24 @@ class CheckVideoLinks extends Command
      */
     public function handle()
     {
-        $file = $this->argument('import_file');
+        $filePath = $this->argument('import_file');
+        $outputFile = $this->option('output') ?: 'video_link_report.csv';
 
-        if (!file_exists($file)) {
-            $this->error("The import file '{$file}' does not exist.");
-            return 1; // Error
+        if (!file_exists($filePath)) {
+            $this->error("The import file '{$filePath}' does not exist.");
+            return 1;
         }
 
-        $this->info("Starting process for file: {$file}");
+        $this->info("Starting process for file: {$filePath}");
 
         // Open input file
-        $handle = fopen($file, 'r');
+        $handle = fopen($filePath, 'r');
         if ($handle === false) {
             $this->error("Could not read the import file.");
             return 1;
         }
 
         // Output configuration
-        $outputFile = 'video_link_report.csv';
-        // Make sure the storage/app directory exists
-        if (!Storage::disk('local')->exists($outputFile)) {
-             Storage::disk('local')->put($outputFile, '');
-        }
-        
         $outputPath = storage_path('app/' . $outputFile);
         $outputHandle = fopen($outputPath, 'w');
         
