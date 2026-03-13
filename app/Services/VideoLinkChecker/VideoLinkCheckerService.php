@@ -19,12 +19,9 @@ class VideoLinkCheckerService
         $responses = Http::pool(function (Pool $pool) use ($items) {
             $requests = [];
             foreach ($items as $index => $item) {
-                // Perform a HEAD request to save bandwidth, fallback to GET if needed by the server
-                // We'll use GET here as some servers block head requests or return misleading statuses.
-                // We set a timeout of 10 seconds.
-                $url = $item['media_url'];
+                $url = $item['media_url'] ?? $item['video_url'] ?? null;
                 if ($url) {
-                    $requests[] = $pool->as((string) $index)->timeout(10)->get($url);
+                    $requests[] = $pool->as((string) $index)->timeout(10)->head($url);
                 }
             }
             return $requests;
@@ -33,7 +30,7 @@ class VideoLinkCheckerService
         $results = [];
 
         foreach ($items as $index => $item) {
-            $url = $item['media_url'];
+            $url = $item['media_url'] ?? $item['video_url'] ?? null;
             
             if (empty($url)) {
                 $item['status'] = 'ERROR';
@@ -58,9 +55,8 @@ class VideoLinkCheckerService
                     $item['status'] = 'ERROR';
                     $this->logFailure($url, $status, 'HTTP Error');
                 }
-            } elseif ($response instanceof \Exception) {
-                // If it's a specific connection/timeout exception
-                $errorMsg = $response->getMessage();
+            } elseif ($response instanceof \Exception || $response === null) {
+                $errorMsg = $response ? $response->getMessage() : 'Unknown Error';
                 if (str_contains(strtolower($errorMsg), 'timeout') || str_contains(strtolower($errorMsg), 'resolving')) {
                     $item['status'] = 'TIMEOUT';
                 } else {
@@ -68,14 +64,58 @@ class VideoLinkCheckerService
                 }
                 
                 $this->logFailure($url, 'Exception', $errorMsg);
-            } else {
-                $item['status'] = 'ERROR';
-                $this->logFailure($url, 'Unknown', 'No response received');
             }
 
             $results[] = $item;
         }
 
+        return $results;
+    }
+
+    /**
+     * Process a CSV file and return the results as an array.
+     */
+    public function processCsv($filePath): array
+    {
+        $handle = fopen($filePath, 'r');
+        $headers = fgetcsv($handle);
+        
+        $firstNameIndex = array_search('firstName', $headers);
+        if ($firstNameIndex === false) $firstNameIndex = array_search('title', $headers);
+        
+        $lastNameIndex = array_search('lastName', $headers);
+        
+        $emailIndex = array_search('email', $headers);
+        
+        $mediaUrlIndex = array_search('media_url', $headers);
+        if ($mediaUrlIndex === false) $mediaUrlIndex = array_search('video_url', $headers);
+        if ($mediaUrlIndex === false) $mediaUrlIndex = array_search('target_value', $headers);
+
+        $results = [];
+        $batch = [];
+        $batchSize = 50; // Lower batch size for web to avoid timeouts
+
+        while (($row = fgetcsv($handle)) !== false) {
+            if (empty(array_filter($row))) continue;
+
+            $batch[] = [
+                'firstName' => $row[$firstNameIndex] ?? '',
+                'lastName' => $lastNameIndex !== false ? ($row[$lastNameIndex] ?? '') : '',
+                'email' => $emailIndex !== false ? ($row[$emailIndex] ?? '') : '',
+                'media_url' => $mediaUrlIndex !== false ? ($row[$mediaUrlIndex] ?? '') : '',
+            ];
+
+            if (count($batch) >= $batchSize) {
+                $results = array_merge($results, $this->checkBatch($batch));
+                $batch = [];
+            }
+        }
+
+        if (!empty($batch)) {
+            $results = array_merge($results, $this->checkBatch($batch));
+        }
+
+        fclose($handle);
         return $results;
     }
 
